@@ -54,7 +54,7 @@ void run_type(std::ranges::input_range auto input) {
         if (auto maybe_command = parse_command(token); maybe_command.has_value()) {
             std::println("{} is a shell builtin", token);
         } else if (auto maybe_path = find_command_in_path_env_var(token); maybe_path.has_value() && file_has_execute_permission(maybe_path.value())) {
-            std::println("{} is executable", maybe_path.value());
+            std::println("{} is {}", token, maybe_path.value());
         } else {
             std::println("{}: not found", token);
         }

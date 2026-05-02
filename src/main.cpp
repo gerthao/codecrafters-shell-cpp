@@ -66,7 +66,6 @@ void run_type(std::ranges::input_range auto input) {
     }
 }
 
-
 void run_pwd() {
     std::println("{}", std::filesystem::current_path().string());
 }
@@ -121,15 +120,10 @@ int main() {
             continue;
         }
 
-        const auto maybe_command = parse_command(tokens.front());
         const auto tail = tokens | std::views::drop(1);
 
-        if (maybe_command.has_value() && maybe_command.value() == Command::Exit) {
-            return 0;
-        }
-
-        if (maybe_command.has_value()) {
-            auto command = maybe_command.value();
+        if (const auto maybe_command = parse_command(tokens.front()); maybe_command.has_value()) {
+            const auto command = maybe_command.value();
 
             if (command == Command::Exit) {
                 return 0;
@@ -142,7 +136,7 @@ int main() {
         // check if command is external
         if (const auto maybe_program_name = find_command_in_path_env_var(tokens.front());
             maybe_program_name.has_value()) {
-            const auto &program_name = maybe_program_name.value();
+            const auto& program_name = maybe_program_name.value();
 
             const pid_t pid = fork();
 

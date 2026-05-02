@@ -6,7 +6,21 @@
 #include <istream>
 #include <sstream>
 
-void echo(std::ranges::input_range auto input) {
+void run_type(std::ranges::input_range auto input) {
+    auto is_builtin = [] (auto token) {
+        return token == "echo" || token == "type";
+    };
+
+    for (auto token: input) {
+        if (is_builtin(token)) {
+            std::println("{} is a shell builtin", token);
+        } else {
+            std::println("{}: not found", token);
+        }
+    }
+}
+
+void run_echo(std::ranges::input_range auto input) {
     for (auto i = 0; i < input.size() - 1; ++i) {
         std::print("{} ", input[i]);
     }
@@ -47,7 +61,9 @@ int main() {
         auto tail = tokens | std::views::drop(1);
 
         if (head == "echo") {
-            echo(tail);
+            run_echo(tail);
+        } else if (head == "type") {
+
         } else {
             std::println("{}: command not found", input);
         }

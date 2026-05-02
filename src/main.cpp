@@ -130,13 +130,20 @@ int main() {
         }
 
         // check if command is external
-        if (const auto maybe_path = find_command_in_path_env_var(tokens.front()); maybe_path.has_value()) {
+        if (const auto maybe_program_name = find_command_in_path_env_var(tokens.front()); maybe_program_name.has_value()) {
+            const auto program_name = maybe_program_name.value();
+
             pid_t pid = fork();
 
-            if (pid < 0) {
-                return 1;
-            } else if (pid == 0) {
-                if (execvp(maybe_path.value().c_str(), reinterpret_cast<char * const *>(tail.data()->c_str())) == -1) {
+            if (pid < 0) return 1;
+
+            if (pid == 0) {
+                std::vector<char*> args;
+                for (const auto& token: tail) {
+                    args.push_back(const_cast<char*>(token.c_str()));
+                }
+
+                if (execvp(program_name.c_str(), args.data()) == -1) {
                     _exit(1);
                 }
             } else {

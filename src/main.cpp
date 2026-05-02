@@ -64,10 +64,6 @@ int main() {
         std::string input;
         std::getline(std::cin, input);
 
-        if (input == "exit") {
-            return 0;
-        }
-
         auto tokens = parse_and_trim_input(input);
         if (tokens.empty()) {
             continue;

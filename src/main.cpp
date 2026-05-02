@@ -139,9 +139,12 @@ int main() {
 
             if (pid == 0) {
                 std::vector<char*> args;
+
+                args.push_back(const_cast<char*>(program_name.c_str()));
                 for (const auto& token: tail) {
                     args.push_back(const_cast<char*>(token.c_str()));
                 }
+                args.push_back(nullptr);
 
                 if (execvp(program_name.c_str(), args.data()) == -1) {
                     _exit(1);

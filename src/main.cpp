@@ -6,10 +6,9 @@
   // Flush after every std::cout / std:cerr
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
-
-  std::print("$ ");
-
+  
   while (true) {
+    std::print("$ ");
     std::string input;
     std::getline(std::cin, input);
     std::println("{}: command not found", input);

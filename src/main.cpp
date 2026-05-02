@@ -11,7 +11,7 @@
 
 enum class Command { Echo, Type, Exit };
 
-std::optional<Command> parse_command(const std::string& input) {
+std::optional<Command> parse_command(const std::string &input) {
     if (input == "echo")
         return Command::Echo;
     if (input == "type")
@@ -21,7 +21,7 @@ std::optional<Command> parse_command(const std::string& input) {
     return std::nullopt;
 }
 
-bool file_exists(const std::string& path) {
+bool file_exists(const std::string &path) {
     return std::filesystem::exists(path);
 }
 
@@ -30,14 +30,14 @@ bool file_has_execute_permission(const std::string &path) {
     return (permissions & std::filesystem::perms::owner_exec) != std::filesystem::perms::none;
 }
 
-std::optional<std::string> find_command_in_path_env_var(const std::string& command) {
+std::optional<std::string> find_command_in_path_env_var(const std::string &command) {
     const auto path_env_var = std::getenv("PATH");
 
     if (path_env_var == nullptr) {
         return std::nullopt;
     }
 
-    for (const auto& path : std::views::split(std::string(path_env_var), ':')) {
+    for (const auto &path: std::views::split(std::string(path_env_var), ':')) {
         const auto path_str = std::ranges::to<std::string>(path);
         auto full_path = path_str;
         full_path.append("/");
@@ -52,7 +52,7 @@ std::optional<std::string> find_command_in_path_env_var(const std::string& comma
 }
 
 void run_type(std::ranges::input_range auto input) {
-    for (const auto& token: input) {
+    for (const auto &token: input) {
         if (const auto maybe_command = parse_command(token); maybe_command.has_value()) {
             std::println("{} is a shell builtin", token);
         } else if (const auto maybe_path = find_command_in_path_env_var(token); maybe_path.has_value()) {
@@ -69,14 +69,19 @@ void run_echo(std::ranges::input_range auto input) {
     }
     std::print("{}", input.back());
 
-    std::println( "");
+    std::println("");
 }
 
-void run_command(const Command& command, std::ranges::input_range auto args) {
-    if (command == Command::Type) {
-        run_type(args);
-    } else if (command == Command::Echo) {
-        run_echo(args);
+void run_command(const Command &command, std::ranges::input_range auto args) {
+    switch (command) {
+        case Command::Type:
+            run_type(args);
+            break;
+        case Command::Echo:
+            run_echo(args);
+            break;
+        default:
+            break;
     }
 }
 
@@ -100,6 +105,7 @@ int main() {
         std::getline(std::cin, input);
 
         auto tokens = parse_and_trim_input(input);
+
         if (tokens.empty()) {
             continue;
         }
@@ -122,27 +128,21 @@ int main() {
             continue;
         }
 
-        const auto maybe_path = find_command_in_path_env_var(tokens.front());
-
-        if (!maybe_path.has_value()) {
-            std::println("{}: command not found", tokens.front());
-            continue;
-        }
-
         // check if command is external
-        if (const auto maybe_program_name = find_command_in_path_env_var(tokens.front()); maybe_program_name.has_value()) {
-            const auto& program_name = maybe_program_name.value();
+        if (const auto maybe_program_name = find_command_in_path_env_var(tokens.front());
+            maybe_program_name.has_value()) {
+            const auto &program_name = maybe_program_name.value();
 
             const pid_t pid = fork();
 
             if (pid < 0) return 1;
 
             if (pid == 0) {
-                std::vector<char*> args;
+                std::vector<char *> args;
 
-                args.push_back(const_cast<char*>(tokens.front().c_str()));
-                for (const auto& token: tail) {
-                    args.push_back(const_cast<char*>(token.c_str()));
+                args.push_back(const_cast<char *>(tokens.front().c_str()));
+                for (const auto &token: tail) {
+                    args.push_back(const_cast<char *>(token.c_str()));
                 }
                 args.push_back(nullptr);
 
@@ -153,6 +153,8 @@ int main() {
                 int status;
                 wait(&status);
             }
+        } else {
+            std::println("{}: command not found", tokens.front());
         }
     }
 }

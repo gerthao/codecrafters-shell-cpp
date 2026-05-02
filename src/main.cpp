@@ -8,7 +8,7 @@
 
 void run_type(std::ranges::input_range auto input) {
     auto is_builtin = [] (auto token) {
-        return token == "echo" || token == "type";
+        return token == "echo" || token == "type" || token == "exit";
     };
 
     for (auto token: input) {

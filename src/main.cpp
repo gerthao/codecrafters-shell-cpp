@@ -9,15 +9,18 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-enum class Command { Echo, Type, Exit };
+enum class Command { Exit, Echo, Pwd, Type };
 
 std::optional<Command> parse_command(const std::string &input) {
-    if (input == "echo")
-        return Command::Echo;
-    if (input == "type")
-        return Command::Type;
     if (input == "exit")
         return Command::Exit;
+    if (input == "echo")
+        return Command::Echo;
+    if (input == "pwd")
+        return Command::Pwd;
+    if (input == "type")
+        return Command::Type;
+
     return std::nullopt;
 }
 
@@ -63,6 +66,11 @@ void run_type(std::ranges::input_range auto input) {
     }
 }
 
+
+void run_pwd() {
+    std::println("{}", std::filesystem::current_path().string());
+}
+
 void run_echo(std::ranges::input_range auto input) {
     for (auto i = 0; i < input.size() - 1; ++i) {
         std::print("{} ", input[i]);
@@ -74,11 +82,14 @@ void run_echo(std::ranges::input_range auto input) {
 
 void run_command(const Command &command, std::ranges::input_range auto args) {
     switch (command) {
-        case Command::Type:
-            run_type(args);
-            break;
         case Command::Echo:
             run_echo(args);
+            break;
+        case Command::Pwd:
+            run_pwd();
+            break;
+        case Command::Type:
+            run_type(args);
             break;
         default:
             break;

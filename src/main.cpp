@@ -6,6 +6,7 @@
 #include <istream>
 #include <sstream>
 #include <filesystem>
+#include <unistd.h>
 
 enum class Command { Echo, Type, Exit };
 
@@ -27,7 +28,6 @@ bool file_has_execute_permission(const std::string &path) {
     const auto permissions = std::filesystem::status(path).permissions();
     return (permissions & std::filesystem::perms::owner_exec) != std::filesystem::perms::none;
 }
-
 
 std::optional<std::string> find_command_in_path_env_var(const std::string& command) {
     const auto path_env_var = std::getenv("PATH");
@@ -106,17 +106,28 @@ int main() {
         const auto maybe_command = parse_command(tokens.front());
         const auto tail = tokens | std::views::drop(1);
 
-        if (!maybe_command.has_value()) {
-            std::println("{}: command not found", input);
-            continue;
-        }
-
-        auto command = maybe_command.value();
-
-        if (command == Command::Exit) {
+        if (maybe_command.has_value() && maybe_command.value() == Command::Exit) {
             return 0;
         }
 
-        run_command(command, tail);
+        if (maybe_command.has_value()) {
+            auto command = maybe_command.value();
+
+            if (command == Command::Exit) {
+                return 0;
+            }
+
+            run_command(command, tail);
+            continue;
+        }
+
+        // check if command is external
+        if (const auto maybe_path = find_command_in_path_env_var(tokens.front()); maybe_path.has_value()) {
+
+            execvp(maybe_path.value().c_str(), reinterpret_cast<char * const *>(tail.data()->c_str()));
+            continue;
+        }
+
+        std::println("{}: command not found", input);
     }
 }

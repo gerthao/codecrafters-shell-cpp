@@ -156,7 +156,7 @@ int main() {
                 }
             } else {
                 int status;
-                wait(&status);
+                waitpid(pid, &status, 0);
             }
         } else {
             std::println("{}: command not found", tokens.front());

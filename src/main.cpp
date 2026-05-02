@@ -131,9 +131,9 @@ int main() {
 
         // check if command is external
         if (const auto maybe_program_name = find_command_in_path_env_var(tokens.front()); maybe_program_name.has_value()) {
-            const auto program_name = maybe_program_name.value();
+            const auto& program_name = maybe_program_name.value();
 
-            pid_t pid = fork();
+            const pid_t pid = fork();
 
             if (pid < 0) return 1;
 

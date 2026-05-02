@@ -122,6 +122,13 @@ int main() {
             continue;
         }
 
+        const auto maybe_path = find_command_in_path_env_var(tokens.front());
+
+        if (!maybe_path.has_value()) {
+            std::println("{}: command not found", tokens.front());
+            continue;
+        }
+
         // check if command is external
         if (const auto maybe_path = find_command_in_path_env_var(tokens.front()); maybe_path.has_value()) {
             pid_t pid = fork();
@@ -137,7 +144,5 @@ int main() {
                 wait(&status);
             }
         }
-
-        std::println("{}: command not found", input);
     }
 }

@@ -87,10 +87,10 @@ void run_echo(std::ranges::input_range auto input) {
 }
 
 void run_cd(const std::string &path) {
-    if (!std::filesystem::exists(path))
-        return;
-
-    std::filesystem::current_path(path);
+    if (std::filesystem::exists(path))
+        std::filesystem::current_path(path);
+    else
+        std::println("cd: {}: No such file or directory", path);
 }
 
 void run_command(const Command &command, std::ranges::input_range auto args) {

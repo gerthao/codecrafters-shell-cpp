@@ -63,7 +63,7 @@ int main() {
         if (head == "echo") {
             run_echo(tail);
         } else if (head == "type") {
-
+            run_type(tail);
         } else {
             std::println("{}: command not found", input);
         }

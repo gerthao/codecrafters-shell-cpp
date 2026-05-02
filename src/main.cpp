@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <print>
 
 int main() {
   // Flush after every std::cout / std:cerr
@@ -7,5 +8,5 @@ int main() {
   std::cerr << std::unitbuf;
 
   // TODO: Uncomment the code below to pass the first stage
-  // std::cout << "$ ";
+  std::print("$ ");
 }

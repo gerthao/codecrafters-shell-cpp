@@ -19,6 +19,16 @@ std::optional<Command> parse_command(const std::string& input) {
     return std::nullopt;
 }
 
+bool file_exists(const std::string& path) {
+    return std::filesystem::exists(path);
+}
+
+bool file_has_execute_permission(const std::string &path) {
+    const auto permissions = std::filesystem::status(path).permissions();
+    return (permissions & std::filesystem::perms::owner_exec) != std::filesystem::perms::none;
+}
+
+
 std::optional<std::string> find_command_in_path_env_var(const std::string& command) {
     const auto path_env_var = std::getenv("PATH");
 
@@ -32,7 +42,7 @@ std::optional<std::string> find_command_in_path_env_var(const std::string& comma
         full_path.append("/");
         full_path.append(command);
 
-        if (std::filesystem::exists(full_path)) {
+        if (file_exists(full_path) && file_has_execute_permission(full_path)) {
             return full_path;
         }
     }
@@ -40,20 +50,11 @@ std::optional<std::string> find_command_in_path_env_var(const std::string& comma
     return std::nullopt;
 }
 
-bool file_exists(const std::string& path) {
-    return std::filesystem::exists(path);
-}
-
-bool file_has_execute_permission(const std::string &path) {
-    const auto permissions = std::filesystem::status(path).permissions();
-    return (permissions & std::filesystem::perms::owner_exec) != std::filesystem::perms::none;
-}
-
 void run_type(std::ranges::input_range auto input) {
-    for (auto token: input) {
-        if (auto maybe_command = parse_command(token); maybe_command.has_value()) {
+    for (const auto& token: input) {
+        if (const auto maybe_command = parse_command(token); maybe_command.has_value()) {
             std::println("{} is a shell builtin", token);
-        } else if (auto maybe_path = find_command_in_path_env_var(token); maybe_path.has_value() && file_has_execute_permission(maybe_path.value())) {
+        } else if (const auto maybe_path = find_command_in_path_env_var(token); maybe_path.has_value()) {
             std::println("{} is {}", token, maybe_path.value());
         } else {
             std::println("{}: not found", token);

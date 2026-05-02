@@ -7,6 +7,7 @@
 #include <sstream>
 #include <filesystem>
 #include <unistd.h>
+#include <sys/wait.h>
 
 enum class Command { Echo, Type, Exit };
 
@@ -123,9 +124,18 @@ int main() {
 
         // check if command is external
         if (const auto maybe_path = find_command_in_path_env_var(tokens.front()); maybe_path.has_value()) {
+            pid_t pid = fork();
 
-            execvp(maybe_path.value().c_str(), reinterpret_cast<char * const *>(tail.data()->c_str()));
-            continue;
+            if (pid < 0) {
+                return 1;
+            } else if (pid == 0) {
+                if (execvp(maybe_path.value().c_str(), reinterpret_cast<char * const *>(tail.data()->c_str())) == -1) {
+                    _exit(1);
+                }
+            } else {
+                int status;
+                wait(&status);
+            }
         }
 
         std::println("{}: command not found", input);

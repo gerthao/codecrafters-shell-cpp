@@ -9,13 +9,20 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-enum class Command { Exit, Echo, Pwd, Type };
+enum class Command { Cd, Echo, Exit, Pwd, Type };
+
+std::tuple<std::string, std::ranges::drop_view<std::ranges::ref_view<const std::vector<std::string>> > >
+get_head_and_tail(const std::vector<std::string> &tokens) {
+    return std::make_tuple(tokens.front(), tokens | std::views::drop(1));
+}
 
 std::optional<Command> parse_command(const std::string &input) {
-    if (input == "exit")
-        return Command::Exit;
+    if (input == "cd")
+        return Command::Cd;
     if (input == "echo")
         return Command::Echo;
+    if (input == "exit")
+        return Command::Exit;
     if (input == "pwd")
         return Command::Pwd;
     if (input == "type")
@@ -79,8 +86,18 @@ void run_echo(std::ranges::input_range auto input) {
     std::println("");
 }
 
+void run_cd(const std::string &path) {
+    if (!std::filesystem::exists(path))
+        return;
+
+    std::filesystem::current_path(path);
+}
+
 void run_command(const Command &command, std::ranges::input_range auto args) {
     switch (command) {
+        case Command::Cd:
+            run_cd(args.front());
+            break;
         case Command::Echo:
             run_echo(args);
             break;
@@ -120,23 +137,22 @@ int main() {
             continue;
         }
 
-        const auto tail = tokens | std::views::drop(1);
+        const auto [command_name, command_args] = get_head_and_tail(tokens);
 
-        if (const auto maybe_command = parse_command(tokens.front()); maybe_command.has_value()) {
+        if (const auto maybe_command = parse_command(command_name); maybe_command.has_value()) {
             const auto command = maybe_command.value();
 
             if (command == Command::Exit) {
                 return 0;
             }
 
-            run_command(command, tail);
+            run_command(command, command_args);
             continue;
         }
 
-        // check if command is external
-        if (const auto maybe_program_name = find_command_in_path_env_var(tokens.front());
-            maybe_program_name.has_value()) {
-            const auto& program_name = maybe_program_name.value();
+        if (const auto maybe_program_path = find_command_in_path_env_var(command_name);
+            maybe_program_path.has_value()) {
+            const auto &program_path = maybe_program_path.value();
 
             const pid_t pid = fork();
 
@@ -145,21 +161,23 @@ int main() {
             if (pid == 0) {
                 std::vector<char *> args;
 
-                args.push_back(const_cast<char *>(tokens.front().c_str()));
-                for (const auto &token: tail) {
+                args.push_back(const_cast<char *>(command_name.c_str()));
+                for (const auto &token: command_args) {
                     args.push_back(const_cast<char *>(token.c_str()));
                 }
                 args.push_back(nullptr);
 
-                if (execvp(program_name.c_str(), args.data()) == -1) {
+                if (execvp(program_path.c_str(), args.data()) == -1) {
                     _exit(1);
                 }
             } else {
                 int status;
                 waitpid(pid, &status, 0);
             }
-        } else {
-            std::println("{}: command not found", tokens.front());
+
+            continue;
         }
+
+        std::println("{}: command not found", command_name);
     }
 }

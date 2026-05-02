@@ -18,15 +18,9 @@ std::optional<Command> parse_command(const std::string& input) {
     return std::nullopt;
 }
 
-bool is_builtin(const std::string& command) {
-    return command == "echo" || command == "type" || command == "exit";
-}
-
 void run_type(std::ranges::input_range auto input) {
     for (auto token: input) {
-        auto maybe_command = parse_command(token);
-
-        if (maybe_command.has_value()) {
+        if (auto maybe_command = parse_command(token); maybe_command.has_value()) {
             std::println("{} is a shell builtin", token);
         } else {
             std::println("{}: not found", token);
@@ -79,8 +73,8 @@ int main() {
             continue;
         }
 
-        auto maybe_command = parse_command(tokens.front());
-        auto tail = tokens | std::views::drop(1);
+        const auto maybe_command = parse_command(tokens.front());
+        const auto tail = tokens | std::views::drop(1);
 
         if (!maybe_command.has_value()) {
             std::println("{}: command not found", input);

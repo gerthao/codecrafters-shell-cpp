@@ -117,12 +117,15 @@ void run_command(const Command &command, std::ranges::input_range auto args) {
 std::vector<std::string> tokenize_input(const std::string &input) {
     std::vector<std::string> tokens;
     std::string current;
-    bool in_quotes = false;
+    bool in_single_quotes = false;
+    bool in_double_quotes = false;
 
     for (const auto &c: input) {
-        if (c == '\'')
-            in_quotes = !in_quotes;
-        else if (c == ' ' && !in_quotes) {
+        if (c == '"')
+            in_double_quotes = !in_double_quotes;
+        else if (c == '\'' && !in_double_quotes)
+            in_single_quotes = !in_single_quotes;
+        else if (c == ' ' && !in_single_quotes && !in_double_quotes) {
             if (current.empty()) continue;
 
             tokens.push_back(current);

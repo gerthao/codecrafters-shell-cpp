@@ -114,12 +114,28 @@ void run_command(const Command &command, std::ranges::input_range auto args) {
     }
 }
 
-std::vector<std::string> parse_and_trim_input(const std::string &input) {
-    std::istringstream stream(input);
-    std::vector<std::string> tokens{
-        std::istream_iterator<std::string>{stream},
-        std::istream_iterator<std::string>{}
-    };
+std::vector<std::string> tokenize_input(const std::string &input) {
+    std::vector<std::string> tokens;
+    std::string current;
+    bool in_quotes = false;
+
+    for (const auto &c: input) {
+        if (c == '\'')
+            in_quotes = !in_quotes;
+        else if (c == ' ' && !in_quotes) {
+            if (current.empty()) continue;
+
+            tokens.push_back(current);
+            current.clear();
+        } else
+            current += c;
+    }
+
+    if (!current.empty()) {
+        tokens.push_back(current);
+        current.clear();
+    }
+
     return tokens;
 }
 
@@ -128,12 +144,12 @@ int main() {
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
 
-    while (true) {
+    for (;;) {
         std::print("$ ");
         std::string input;
         std::getline(std::cin, input);
 
-        auto tokens = parse_and_trim_input(input);
+        auto tokens = tokenize_input(input);
 
         if (tokens.empty()) {
             continue;

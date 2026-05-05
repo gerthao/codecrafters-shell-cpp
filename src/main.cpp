@@ -124,24 +124,23 @@ std::vector<std::string> tokenize_input(const std::string &input) {
     bool is_using_backslash = false;
     auto in_quoting_mode = [&] { return in_single_quotes || in_double_quotes; };
 
+    constexpr char BACKSLASH = '\\';
+    constexpr char DOUBLE_QUOTE = '"';
+    constexpr char SINGLE_QUOTE = '\'';
+    constexpr char WHITESPACE = ' ';
+
     do {
         for (const auto &c: input_copy) {
             if (is_using_backslash && !in_single_quotes) {
                 current += c;
                 is_using_backslash = false;
-                continue;
-            }
-
-            if (c == '\\' && !in_single_quotes) {
+            } else if (c == BACKSLASH && !in_single_quotes)
                 is_using_backslash = true;
-                continue;
-            }
-
-            if (c == '"' && !in_single_quotes)
+            else if (c == DOUBLE_QUOTE && !in_single_quotes)
                 in_double_quotes = !in_double_quotes;
-            else if (c == '\'' && !in_double_quotes)
+            else if (c == SINGLE_QUOTE && !in_double_quotes)
                 in_single_quotes = !in_single_quotes;
-            else if (c == ' ' && !in_quoting_mode()) {
+            else if (c == WHITESPACE && !in_quoting_mode()) {
                 if (current.empty()) continue;
 
                 tokens.push_back(current);

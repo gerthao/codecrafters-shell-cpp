@@ -126,13 +126,13 @@ std::vector<std::string> tokenize_input(const std::string &input) {
 
     do {
         for (const auto &c: input_copy) {
-            if (is_using_backslash) {
+            if (is_using_backslash && !in_single_quotes) {
                 current += c;
                 is_using_backslash = false;
                 continue;
             }
 
-            if (c == '\\') {
+            if (c == '\\' && !in_single_quotes) {
                 is_using_backslash = true;
                 continue;
             }

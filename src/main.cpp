@@ -128,6 +128,7 @@ std::vector<std::string> tokenize_input(const std::string &input) {
     constexpr char DOUBLE_QUOTE = '"';
     constexpr char SINGLE_QUOTE = '\'';
     constexpr char WHITESPACE = ' ';
+    constexpr char NEWLINE = '\n';
 
     do {
         for (const auto &c: input_copy) {
@@ -153,7 +154,7 @@ std::vector<std::string> tokenize_input(const std::string &input) {
         if (!current.empty()) {
             // when user enters new-line
             if (in_quoting_mode()) {
-                current += "\n";
+                current += NEWLINE;
                 std::getline(std::cin, input_copy);
                 continue;
             }

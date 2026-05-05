@@ -117,27 +117,52 @@ void run_command(const Command &command, std::ranges::input_range auto args) {
 std::vector<std::string> tokenize_input(const std::string &input) {
     std::vector<std::string> tokens;
     std::string current;
+    std::string input_copy = input;
+
     bool in_single_quotes = false;
     bool in_double_quotes = false;
+    bool is_using_backslash = false;
+    auto in_quoting_mode = [&] { return in_single_quotes || in_double_quotes; };
 
-    for (const auto &c: input) {
-        if (c == '"')
-            in_double_quotes = !in_double_quotes;
-        else if (c == '\'' && !in_double_quotes)
-            in_single_quotes = !in_single_quotes;
-        else if (c == ' ' && !in_single_quotes && !in_double_quotes) {
-            if (current.empty()) continue;
+    do {
+        for (const auto &c: input_copy) {
+            if (is_using_backslash) {
+                current += c;
+                is_using_backslash = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                is_using_backslash = true;
+                continue;
+            }
+
+            if (c == '"' && !in_single_quotes)
+                in_double_quotes = !in_double_quotes;
+            else if (c == '\'' && !in_double_quotes)
+                in_single_quotes = !in_single_quotes;
+            else if (c == ' ' && !in_quoting_mode()) {
+                if (current.empty()) continue;
+
+                tokens.push_back(current);
+                current.clear();
+            } else
+                current += c;
+        }
+
+        // handles last part of input after iteration ends
+        if (!current.empty()) {
+            // when user enters new-line
+            if (in_quoting_mode()) {
+                current += "\n";
+                std::getline(std::cin, input_copy);
+                continue;
+            }
 
             tokens.push_back(current);
             current.clear();
-        } else
-            current += c;
-    }
-
-    if (!current.empty()) {
-        tokens.push_back(current);
-        current.clear();
-    }
+        }
+    } while (in_quoting_mode());
 
     return tokens;
 }

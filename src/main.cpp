@@ -3,18 +3,49 @@
 #include <print>
 #include <ranges>
 #include <vector>
-#include <istream>
 #include <sstream>
 #include <filesystem>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <algorithm>
+#include <fstream>
+#include <fcntl.h>
+
+class Writer {
+public:
+    Writer() : target(&std::cout) {
+    }
+
+    void redirect_to_file(const std::string &file_path) {
+        file_stream.open(file_path, std::ios::out);
+        if (file_stream.is_open()) {
+            target = &file_stream;
+        }
+    }
+
+    template<typename... Args>
+    void write(std::format_string<Args...> fmt, Args &&... args) {
+        std::print(*target, fmt, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    void writeln(std::format_string<Args...> fmt, Args &&... args) {
+        std::println(*target, fmt, std::forward<Args>(args)...);
+    }
+
+private:
+    std::ostream *target;
+    std::ofstream file_stream;
+};
+
+constexpr char BACKSLASH = '\\';
+constexpr char DOUBLE_QUOTE = '"';
+constexpr char SINGLE_QUOTE = '\'';
+constexpr char WHITESPACE = ' ';
+constexpr char NEWLINE = '\n';
+constexpr char REDIRECT_CHAR = '>';
 
 enum class Command { Cd, Echo, Exit, Pwd, Type };
-
-std::tuple<std::string, std::ranges::drop_view<std::ranges::ref_view<const std::vector<std::string>> > >
-get_head_and_tail(const std::vector<std::string> &tokens) {
-    return std::make_tuple(tokens.front(), tokens | std::views::drop(1));
-}
 
 std::optional<Command> parse_command(const std::string &input) {
     if (input == "cd")
@@ -61,29 +92,28 @@ std::optional<std::string> find_command_in_path_env_var(const std::string &comma
     return std::nullopt;
 }
 
-void run_type(std::ranges::input_range auto input) {
+void run_type(std::ranges::input_range auto input, Writer &writer) {
     for (const auto &token: input) {
         if (const auto maybe_command = parse_command(token); maybe_command.has_value()) {
-            std::println("{} is a shell builtin", token);
+            writer.writeln("{} is a shell builtin", token);
         } else if (const auto maybe_path = find_command_in_path_env_var(token); maybe_path.has_value()) {
-            std::println("{} is {}", token, maybe_path.value());
+            writer.writeln("{} is {}", token, maybe_path.value());
         } else {
             std::println("{}: not found", token);
         }
     }
 }
 
-void run_pwd() {
-    std::println("{}", std::filesystem::current_path().string());
+void run_pwd(Writer &writer) {
+    writer.writeln("{}", std::filesystem::current_path().string());
 }
 
-void run_echo(std::ranges::input_range auto input) {
+void run_echo(std::ranges::range auto input, Writer &writer) {
     for (auto i = 0; i < input.size() - 1; ++i) {
-        std::print("{} ", input[i]);
+        writer.write("{} ", input[i]);
     }
-    std::print("{}", input.back());
-
-    std::println("");
+    writer.write("{}", input.back());
+    writer.writeln("");
 }
 
 void run_cd(const std::string &path) {
@@ -95,22 +125,34 @@ void run_cd(const std::string &path) {
         std::println("cd: {}: No such file or directory", path);
 }
 
-void run_command(const Command &command, std::ranges::input_range auto args) {
-    switch (command) {
-        case Command::Cd:
-            run_cd(args.front());
-            break;
-        case Command::Echo:
-            run_echo(args);
-            break;
-        case Command::Pwd:
-            run_pwd();
-            break;
-        case Command::Type:
-            run_type(args);
-            break;
-        default:
-            break;
+void run_external_program(const std::string &program_path, const std::vector<std::string> &command_args,
+                          const std::string &file_name) {
+    std::vector<char *> args;
+    for (const auto &token: command_args) {
+        args.push_back(const_cast<char *>(token.c_str()));
+    }
+    args.push_back(nullptr);
+
+    const pid_t pid = fork();
+    if (pid < 0) return;
+    if (pid == 0) {
+        const int file_descriptor = open(file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+        if (file_descriptor < 0) {
+            _exit(1);
+        }
+
+        if (dup2(file_descriptor, STDOUT_FILENO) < 0) {
+            _exit(1);
+        }
+
+        close(file_descriptor);
+
+        if (execvp(program_path.c_str(), args.data()) == -1) {
+            _exit(1);
+        }
+    } else {
+        int status;
+        waitpid(pid, &status, 0);
     }
 }
 
@@ -123,12 +165,6 @@ std::vector<std::string> tokenize_input(const std::string &input) {
     bool in_double_quotes = false;
     bool is_using_backslash = false;
     auto in_quoting_mode = [&] { return in_single_quotes || in_double_quotes; };
-
-    constexpr char BACKSLASH = '\\';
-    constexpr char DOUBLE_QUOTE = '"';
-    constexpr char SINGLE_QUOTE = '\'';
-    constexpr char WHITESPACE = ' ';
-    constexpr char NEWLINE = '\n';
 
     do {
         for (const auto &c: input_copy) {
@@ -173,54 +209,66 @@ int main() {
     std::cerr << std::unitbuf;
 
     for (;;) {
+        Writer writer;
         std::print("$ ");
         std::string input;
         std::getline(std::cin, input);
 
         auto tokens = tokenize_input(input);
-
         if (tokens.empty()) {
             continue;
         }
 
-        const auto [command_name, command_args] = get_head_and_tail(tokens);
+        const auto has_redirection = std::ranges::any_of(tokens, [](const auto &t) {
+            return t == ">" || t == "1>";
+        });
 
-        if (const auto maybe_command = parse_command(command_name); maybe_command.has_value()) {
-            const auto command = maybe_command.value();
+        const auto command_args = tokens | std::views::take_while([](const auto &t) {
+            return t != ">" && t != "1>";
+        });
 
-            if (command == Command::Exit) {
-                return 0;
+        const std::string file_name = has_redirection
+                                          ? (tokens
+                                             | std::views::drop_while([](const auto &t) {
+                                                 return t != ">" && t != "1>";
+                                             })
+                                             | std::views::drop(1)).front()
+                                          : "";
+
+        if (has_redirection) {
+            writer.redirect_to_file(file_name);
+        }
+
+        const auto command_args_vec = std::ranges::to<std::vector<std::string> >(command_args);
+        const auto &command_name = command_args_vec.front();
+
+        if (const auto opt_command = parse_command(command_name); opt_command.has_value()) {
+            switch (const auto command = opt_command.value()) {
+                case Command::Exit:
+                    return 0;
+                case Command::Echo:
+                    run_echo(command_args_vec, writer);
+                    break;
+                case Command::Pwd:
+                    run_pwd(writer);
+                    break;
+                case Command::Type:
+                    run_type(command_args_vec, writer);
+                    break;
+                case Command::Cd:
+                    run_cd((command_args_vec | std::views::drop(1)).front());
+                    break;
+                default:
+                    break;
             }
-
-            run_command(command, command_args);
             continue;
         }
 
-        if (const auto maybe_program_path = find_command_in_path_env_var(command_name);
-            maybe_program_path.has_value()) {
-            const auto &program_path = maybe_program_path.value();
+        if (const auto maybe_program_path = find_command_in_path_env_var(command_name); maybe_program_path.
+            has_value()) {
+            const auto program_path = maybe_program_path.value();
 
-            const pid_t pid = fork();
-
-            if (pid < 0) return 1;
-
-            if (pid == 0) {
-                std::vector<char *> args;
-
-                args.push_back(const_cast<char *>(command_name.c_str()));
-                for (const auto &token: command_args) {
-                    args.push_back(const_cast<char *>(token.c_str()));
-                }
-                args.push_back(nullptr);
-
-                if (execvp(program_path.c_str(), args.data()) == -1) {
-                    _exit(1);
-                }
-            } else {
-                int status;
-                waitpid(pid, &status, 0);
-            }
-
+            run_external_program(program_path, command_args_vec, file_name);
             continue;
         }
 

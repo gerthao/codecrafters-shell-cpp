@@ -99,6 +99,7 @@ void run_cd(const std::string& path) {
 }
 
 void run_external_program(const std::string& program_path, const std::vector<std::string>& command_args,
+                            const bool has_redirection,
                           const std::string& file_name) {
     std::vector<char *> args;
     for (const auto &token: command_args) {
@@ -109,16 +110,18 @@ void run_external_program(const std::string& program_path, const std::vector<std
     const pid_t pid = fork();
     if (pid < 0) return;
     if (pid == 0) {
-        const int file_descriptor = open(file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-        if (file_descriptor < 0) {
-            _exit(1);
-        }
+        if (has_redirection && !file_name.empty()) {
+            const int file_descriptor = open(file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+            if (file_descriptor < 0) {
+                _exit(1);
+            }
 
-        if (dup2(file_descriptor, STDOUT_FILENO) < 0) {
-            _exit(1);
-        }
+            if (dup2(file_descriptor, STDOUT_FILENO) < 0) {
+                _exit(1);
+            }
 
-        close(file_descriptor);
+            close(file_descriptor);
+        }
 
         if (execvp(program_path.c_str(), args.data()) == -1) {
             _exit(1);
@@ -243,7 +246,7 @@ int main() {
             has_value()) {
             const auto& program_path = maybe_program_path.value();
 
-            run_external_program(program_path, command_args_vec, file_name);
+            run_external_program(program_path, command_args_vec, has_redirection, file_name);
             continue;
         }
 

@@ -11,33 +11,6 @@
 #include <fstream>
 #include <fcntl.h>
 
-class Writer {
-public:
-    Writer() : target(&std::cout) {
-    }
-
-    void redirect_to_file(const std::string &file_path) {
-        file_stream.open(file_path, std::ios::out);
-        if (file_stream.is_open()) {
-            target = &file_stream;
-        }
-    }
-
-    template<typename... Args>
-    void write(std::format_string<Args...> fmt, Args &&... args) {
-        std::print(*target, fmt, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void writeln(std::format_string<Args...> fmt, Args &&... args) {
-        std::println(*target, fmt, std::forward<Args>(args)...);
-    }
-
-private:
-    std::ostream *target;
-    std::ofstream file_stream;
-};
-
 constexpr char BACKSLASH = '\\';
 constexpr char DOUBLE_QUOTE = '"';
 constexpr char SINGLE_QUOTE = '\'';
@@ -71,7 +44,7 @@ bool file_has_execute_permission(const std::string &path) {
     return (permissions & std::filesystem::perms::owner_exec) != std::filesystem::perms::none;
 }
 
-std::optional<std::string> find_command_in_path_env_var(const std::string &command) {
+std::optional<std::string> find_command_in_path_env_var(const std::string& command) {
     const auto path_env_var = std::getenv("PATH");
 
     if (path_env_var == nullptr) {
@@ -92,31 +65,31 @@ std::optional<std::string> find_command_in_path_env_var(const std::string &comma
     return std::nullopt;
 }
 
-void run_type(std::ranges::input_range auto input, Writer &writer) {
+void run_type(std::ranges::input_range auto input, std::ostream& output_os = std::cout) {
     for (const auto &token: input) {
         if (const auto maybe_command = parse_command(token); maybe_command.has_value()) {
-            writer.writeln("{} is a shell builtin", token);
+            std::println(output_os, "{} is a shell builtin", token);
         } else if (const auto maybe_path = find_command_in_path_env_var(token); maybe_path.has_value()) {
-            writer.writeln("{} is {}", token, maybe_path.value());
+            std::println(output_os, "{} is {}", token, maybe_path.value());
         } else {
             std::println("{}: not found", token);
         }
     }
 }
 
-void run_pwd(Writer &writer) {
-    writer.writeln("{}", std::filesystem::current_path().string());
+void run_pwd(std::ostream& output_os = std::cout) {
+    std::println(output_os, "{}", std::filesystem::current_path().string());
 }
 
-void run_echo(std::ranges::range auto input, Writer &writer) {
+void run_echo(std::ranges::range auto input, std::ostream& output_os = std::cout) {
     for (auto i = 0; i < input.size() - 1; ++i) {
-        writer.write("{} ", input[i]);
+        std::print(output_os, "{} ", input[i]);
     }
-    writer.write("{}", input.back());
-    writer.writeln("");
+    std::print(output_os, "{}", input.back());
+    std::println(output_os, "");
 }
 
-void run_cd(const std::string &path) {
+void run_cd(const std::string& path) {
     if (path == "~")
         std::filesystem::current_path(std::getenv("HOME"));
     else if (std::filesystem::exists(path))
@@ -125,8 +98,8 @@ void run_cd(const std::string &path) {
         std::println("cd: {}: No such file or directory", path);
 }
 
-void run_external_program(const std::string &program_path, const std::vector<std::string> &command_args,
-                          const std::string &file_name) {
+void run_external_program(const std::string& program_path, const std::vector<std::string>& command_args,
+                          const std::string& file_name) {
     std::vector<char *> args;
     for (const auto &token: command_args) {
         args.push_back(const_cast<char *>(token.c_str()));
@@ -209,7 +182,6 @@ int main() {
     std::cerr << std::unitbuf;
 
     for (;;) {
-        Writer writer;
         std::print("$ ");
         std::string input;
         std::getline(std::cin, input);
@@ -227,7 +199,10 @@ int main() {
             return t != ">" && t != "1>";
         });
 
-        const std::string file_name = has_redirection
+        const auto command_args_vec = std::ranges::to<std::vector<std::string> >(command_args);
+        const auto &command_name = command_args_vec.at(0);
+
+        const auto file_name = has_redirection
                                           ? (tokens
                                              | std::views::drop_while([](const auto &t) {
                                                  return t != ">" && t != "1>";
@@ -235,25 +210,25 @@ int main() {
                                              | std::views::drop(1)).front()
                                           : "";
 
-        if (has_redirection) {
-            writer.redirect_to_file(file_name);
+        std::ofstream file_stream;
+        if (has_redirection && !file_name.empty()) {
+            file_stream.open(file_name);
         }
 
-        const auto command_args_vec = std::ranges::to<std::vector<std::string> >(command_args);
-        const auto &command_name = command_args_vec.front();
+        std::ostream& output_os = has_redirection ? file_stream : std::cout;
 
         if (const auto opt_command = parse_command(command_name); opt_command.has_value()) {
-            switch (const auto command = opt_command.value()) {
+            switch (opt_command.value()) {
                 case Command::Exit:
                     return 0;
                 case Command::Echo:
-                    run_echo(command_args_vec, writer);
+                    run_echo(command_args_vec | std::views::drop(1), output_os);
                     break;
                 case Command::Pwd:
-                    run_pwd(writer);
+                    run_pwd();
                     break;
                 case Command::Type:
-                    run_type(command_args_vec, writer);
+                    run_type(command_args_vec | std::views::drop(1), output_os);
                     break;
                 case Command::Cd:
                     run_cd((command_args_vec | std::views::drop(1)).front());
@@ -266,7 +241,7 @@ int main() {
 
         if (const auto maybe_program_path = find_command_in_path_env_var(command_name); maybe_program_path.
             has_value()) {
-            const auto program_path = maybe_program_path.value();
+            const auto& program_path = maybe_program_path.value();
 
             run_external_program(program_path, command_args_vec, file_name);
             continue;

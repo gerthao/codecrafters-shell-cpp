@@ -342,7 +342,7 @@ int main() {
         });
 
         const auto command_args = tokens | std::views::take_while([](const auto &t) {
-            return is_redirect_out_token(t) || is_append_out_token(t) || t == "2>";
+            return !is_redirect_out_token(t) && !is_append_out_token(t) || t != "2>";
         });
 
         const auto command_args_vec = std::ranges::to<std::vector<std::string> >(command_args | std::views::drop(1));

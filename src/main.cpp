@@ -13,7 +13,6 @@
 #include <utility>
 #include <fcntl.h>
 
-
 template<class... Ts>
 struct visitor : Ts... {
     using Ts::operator()...;
@@ -28,6 +27,15 @@ constexpr char SINGLE_QUOTE = '\'';
 constexpr char WHITESPACE = ' ';
 constexpr char NEWLINE = '\n';
 constexpr char REDIRECT_CHAR = '>';
+
+bool is_redirect_out_token(const std::string &token) {
+    return token == ">" || token == "1>";
+}
+
+bool is_append_out_token(const std::string &token) {
+    return token == ">>" || token == "1>>";
+}
+
 
 std::optional<std::string> find_command_in_path_env_var(const std::string &command) {
     const auto path_env_var = std::getenv("PATH");
@@ -146,9 +154,10 @@ public:
                                                                        program_path(std::move(program_path)) {
     }
 
-    [[nodiscard]] std::optional<int> run(const std::optional<std::string> &out_file,
-                                         const std::optional<std::string> &err_file,
-                                         const std::vector<std::string> &args) const {
+    [[nodiscard]] std::optional<int> run(
+        const std::optional<std::tuple<std::string, std::_Ios_Openmode> > &out_file_and_mode,
+        const std::optional<std::string> &err_file,
+        const std::vector<std::string> &args) const {
         std::vector<char *> args_copy;
 
         args_copy.push_back(const_cast<char *>(name.c_str()));
@@ -164,10 +173,16 @@ public:
             int status;
             waitpid(pid, &status, 0);
         } else {
-            if (out_file.has_value()) {
-                const auto &file_name = out_file.value();
-                const int file_descriptor = open(file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC,
-                                                 S_IRUSR | S_IWUSR);
+            if (out_file_and_mode.has_value()) {
+                const auto &file_name = std::get<0>(*out_file_and_mode);
+                const auto file_mode = std::get<1>(*out_file_and_mode);
+
+                const int file_descriptor = open(
+                    file_name.c_str(),
+                    O_WRONLY | O_CREAT | (file_mode == std::ios::out ? O_TRUNC : O_APPEND),
+                    S_IRUSR | S_IWUSR
+                );
+
                 if (file_descriptor < 0) {
                     _exit(1);
                 }
@@ -226,9 +241,12 @@ public:
 };
 
 
-std::ostream &get_ostream_out(const std::optional<std::string> &file, std::optional<std::ofstream> &file_holder) {
-    if (file.has_value()) {
-        file_holder.emplace(file.value(), std::ios::out);
+std::ostream &get_ostream_out(const std::optional<std::tuple<std::string, std::_Ios_Openmode> > &file_and_mode,
+                              std::optional<std::ofstream> &file_holder) {
+    if (file_and_mode.has_value()) {
+        const auto &file_name = std::get<0>(file_and_mode.value());
+        const auto file_mode = std::get<1>(file_and_mode.value());
+        file_holder.emplace(file_name, file_mode);
         return *file_holder;
     }
     return std::cout;
@@ -313,9 +331,11 @@ int main() {
             continue;
         }
 
-        const auto has_redirection_out = std::ranges::any_of(tokens, [](const auto &t) {
-            return t == ">" || t == "1>";
+        const auto x = std::ranges::find_if(tokens, [](const auto &t) {
+            return t == ">" || t == "1>" || t == ">>" || t == "1>>";
         });
+
+        const auto maybe_out_token = std::empty(*x) ? std::make_optional<std::string>(*x) : std::nullopt;
 
         const auto has_redirection_err = std::ranges::any_of(tokens, [](const auto &t) {
             return t == "2>";
@@ -328,14 +348,33 @@ int main() {
         const auto command_args_vec = std::ranges::to<std::vector<std::string> >(command_args | std::views::drop(1));
         const auto &command_name = command_args.front();
 
+        //
+        // std::optional<std::enable_if_t<true, std::optional<std::_Ios_Openmode> > > out_mode = std::nullopt;
+        //
+        // if (maybe_out_token.has_value()) {
+        //     if (maybe_out_token.value() == ">" || maybe_out_token.value() == "1>")
+        //         out_mode = std::make_optional(std::ios::out);
+        //     else
+        //         out_mode = std::make_optional(std::ios::app);
+        // }
+        /*std::optional<std::string> file_name_out = maybe_out_token.transform([tokens](const std::string& _) {
+            return (tokens | std::views::drop_while([](const auto &t) {
+                        return t != ">" && t != "1>" || t != ">>" || t != "1>>";
+                    }) | std::views::drop(1)).front();
+        });*/
 
-        const auto file_name_out = has_redirection_out
-                                       ? std::make_optional((tokens
-                                                             | std::views::drop_while([](const auto &t) {
-                                                                 return t != ">" && t != "1>";
-                                                             })
-                                                             | std::views::drop(1)).front())
-                                       : std::nullopt;
+        const std::optional<std::tuple<std::string, std::_Ios_Openmode> > file_out_and_mode = maybe_out_token.transform(
+            [tokens](const std::string &out_token) {
+                const auto file_name = (tokens | std::views::drop_while([](const auto &t) {
+                    return is_redirect_out_token(t) || is_append_out_token(t);
+                }) | std::views::drop(1)).front();
+
+                const auto mode = is_redirect_out_token(out_token)
+                                      ? std::ios::out
+                                      : std::ios::app;
+
+                return std::make_tuple(file_name, mode);
+            });
 
         const auto file_name_err = has_redirection_err
                                        ? std::make_optional((tokens
@@ -347,14 +386,14 @@ int main() {
 
         std::optional<std::ofstream> file_holder_out;
         std::optional<std::ofstream> file_holder_err;
-        auto &out_os = get_ostream_out(file_name_out, file_holder_out);
+        auto &out_os = get_ostream_out(file_out_and_mode, file_holder_out);
         auto &out_err = get_ostream_err(file_name_err, file_holder_err);
 
         if (const auto maybe_cmd = CommandFactory::create_command(command_name); maybe_cmd.has_value()) {
             const auto &command = maybe_cmd.value();
 
             const auto result = std::visit(
-                visitor {
+                visitor{
                     [&out_os, &out_err, command_args_vec](const EchoCmd &cmd) {
                         return cmd.run(out_os, out_err, command_args_vec);
                     },
@@ -370,8 +409,8 @@ int main() {
                     [&out_os, &out_err, command_args_vec](const TypeCmd &cmd) {
                         return cmd.run(out_os, out_err, command_args_vec);
                     },
-                    [&file_name_out, &file_name_err, command_args_vec](const ExternalCmd &cmd) {
-                        return cmd.run(file_name_out, file_name_err, command_args_vec);
+                    [&file_out_and_mode, &file_name_err, command_args_vec](const ExternalCmd &cmd) {
+                        return cmd.run(file_out_and_mode, file_name_err, command_args_vec);
                     }
                 }, command);
 

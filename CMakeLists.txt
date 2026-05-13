@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
+set(CMAKE_GENERATOR "Ninja" CACHE INTERNAL "" FORCE)
 project(shell-starter-cpp LANGUAGES CXX)
 
 file(GLOB_RECURSE SOURCE_FILES src/*.cpp src/*.hpp)

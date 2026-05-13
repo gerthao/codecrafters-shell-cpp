@@ -28,23 +28,6 @@ constexpr char WHITESPACE = ' ';
 constexpr char NEWLINE = '\n';
 constexpr char REDIRECT_CHAR = '>';
 
-bool is_redirect_out_token(const std::string &token) {
-    return token == ">" || token == "1>";
-}
-
-bool is_append_out_token(const std::string &token) {
-    return token == ">>" || token == "1>>";
-}
-
-bool is_redirect_err_token(const std::string &token) {
-    return token == "2>";
-}
-
-bool is_append_err_token(const std::string &token) {
-    return token == "2>>";
-}
-
-
 std::optional<std::string> find_command_in_path_env_var(const std::string &command) {
     const auto path_env_var = std::getenv("PATH");
 
@@ -362,11 +345,11 @@ int main() {
                     return t != ">" && t != "1>" && t != ">>" && t != "1>>" && t != "2>" && t != "2>>";
                 }) | std::views::drop(1)).front();
 
-                const auto mode = is_redirect_out_token(out_token)
+                const auto mode = (out_token == ">" || out_token == "1>")
                                       ? std::ios::out
                                       : std::ios::app;
 
-                return std::make_tuple(file_name, mode);
+                return std::make_tuple<const std::string&, const std::_Ios_Openmode>(file_name, std::move(mode));
             });
 
         const auto file_name_err = has_redirection_err

@@ -382,6 +382,6 @@ int main() {
             continue;
         }
 
-        std::println(out_err, "{}, command not found", command_name);
+        std::println(out_err, "{}: command not found", command_name);
     }
 }

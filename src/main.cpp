@@ -342,26 +342,11 @@ int main() {
         });
 
         const auto command_args = tokens | std::views::take_while([](const auto &t) {
-            return t != ">" && t != "1>" && t != "2>";
+            return is_redirect_out_token(t) || is_append_out_token(t) || t == "2>";
         });
 
         const auto command_args_vec = std::ranges::to<std::vector<std::string> >(command_args | std::views::drop(1));
         const auto &command_name = command_args.front();
-
-        //
-        // std::optional<std::enable_if_t<true, std::optional<std::_Ios_Openmode> > > out_mode = std::nullopt;
-        //
-        // if (maybe_out_token.has_value()) {
-        //     if (maybe_out_token.value() == ">" || maybe_out_token.value() == "1>")
-        //         out_mode = std::make_optional(std::ios::out);
-        //     else
-        //         out_mode = std::make_optional(std::ios::app);
-        // }
-        /*std::optional<std::string> file_name_out = maybe_out_token.transform([tokens](const std::string& _) {
-            return (tokens | std::views::drop_while([](const auto &t) {
-                        return t != ">" && t != "1>" || t != ">>" || t != "1>>";
-                    }) | std::views::drop(1)).front();
-        });*/
 
         const std::optional<std::tuple<std::string, std::_Ios_Openmode> > file_out_and_mode = maybe_out_token.transform(
             [tokens](const std::string &out_token) {

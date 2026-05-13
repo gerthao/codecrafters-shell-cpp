@@ -36,6 +36,14 @@ bool is_append_out_token(const std::string &token) {
     return token == ">>" || token == "1>>";
 }
 
+bool is_redirect_err_token(const std::string &token) {
+    return token == "2>";
+}
+
+bool is_append_err_token(const std::string &token) {
+    return token == "2>>";
+}
+
 
 std::optional<std::string> find_command_in_path_env_var(const std::string &command) {
     const auto path_env_var = std::getenv("PATH");
@@ -342,7 +350,7 @@ int main() {
         });
 
         const auto command_args = tokens | std::views::take_while([](const auto &t) {
-            return !is_redirect_out_token(t) && !is_append_out_token(t) || t != "2>";
+            return !is_redirect_out_token(t) && !is_append_out_token(t) && !is_redirect_err_token(t);
         });
 
         const auto command_args_vec = std::ranges::to<std::vector<std::string> >(command_args | std::views::drop(1));

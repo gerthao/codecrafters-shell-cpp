@@ -350,7 +350,7 @@ int main() {
         });
 
         const auto command_args = tokens | std::views::take_while([](const auto &t) {
-            return !is_redirect_out_token(t) && !is_append_out_token(t) && !is_redirect_err_token(t);
+            return t != ">" && t != "1>" && t != ">>" && t != "1>>" && t != "2>" && t != "2>>";
         });
 
         const auto command_args_vec = std::ranges::to<std::vector<std::string> >(command_args | std::views::drop(1));
@@ -359,7 +359,7 @@ int main() {
         const std::optional<std::tuple<std::string, std::_Ios_Openmode> > file_out_and_mode = maybe_out_token.transform(
             [tokens](const std::string &out_token) {
                 const auto file_name = (tokens | std::views::drop_while([](const auto &t) {
-                    return is_redirect_out_token(t) || is_append_out_token(t);
+                    return t != ">" && t != "1>" && t != ">>" && t != "1>>" && t != "2>" && t != "2>>";
                 }) | std::views::drop(1)).front();
 
                 const auto mode = is_redirect_out_token(out_token)

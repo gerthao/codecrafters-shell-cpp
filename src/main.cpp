@@ -151,7 +151,7 @@ public:
                                          const std::vector<std::string> &args) const {
         std::vector<char *> args_copy;
 
-        args_copy.push_back(const_cast<char *>(program_path.c_str()));
+        args_copy.push_back(const_cast<char *>(name.c_str()));
         for (const auto &arg: args)
             args_copy.push_back(const_cast<char *>(arg.c_str()));
 
